@@ -29,13 +29,13 @@ class AppConfig(BaseSettings):
 
     @field_validator("binance_api_key", "binance_api_secret")
     @classmethod
-    def validate_credentials(cls, v: str, info: Any) -> str:
+    def validate_credentials(cls, v: Any, info: Any) -> str:
         """
         Validates that the credentials are not empty.
         """
-        if not v or v.strip() == "" or "your_api" in v.lower():
+        if not isinstance(v, str) or not v.strip() or "your_api" in v.lower():
             raise MissingCredentialError(f"Required credential '{info.field_name}' is missing or is the default placeholder.")
-        return v
+        return v.strip()
 
 def get_config() -> AppConfig:
     """

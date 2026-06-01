@@ -92,10 +92,14 @@ class OrderManager:
 
         # 2. Validate inputs
         try:
+            # Pydantic will handle upper() conversion via model_validator if we use the model directly
+            # But for validate_order_params, we ensure consistency here
             validate_order_params(params)
-        except ValidationError as e:
-            logger.error("Validation failed for %s order: %s", order_type, e)
+        except ValidationError:
             raise
+        except Exception as e:
+            logger.error("Unexpected validation error: %s", e)
+            raise ValidationError(f"Validation logic failed: {e}") from e
 
         # 3. Log request
         log_msg = f"{order_type} ORDER REQUEST | {side} {symbol} | Qty: {quantity}"

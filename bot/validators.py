@@ -36,6 +36,9 @@ class OrderValidator(BaseModel):
         """
         if self.order_type == OrderType.LIMIT and self.price is None:
             raise ValueError("Price is required for LIMIT orders.")
+        
+        # Ensure symbol is uppercase for Binance
+        self.symbol = self.symbol.strip().upper()
         return self
 
 def validate_order_params(params: Dict[str, Any]) -> bool:
