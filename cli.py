@@ -1,44 +1,150 @@
 """
-Main entry point for the Binance Futures Testnet trading bot CLI.
+Command-line interface for the Binance Futures Testnet trading bot.
+Powered by Typer and Rich for a clean and interactive experience.
 """
 
 import logging
+from typing import Any, Dict, Optional
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
+from rich import print as rprint
+
+from bot.config import get_config
 from bot.logging_config import setup_logging
 from bot.client import BinanceClient
 from bot.orders import OrderManager
-from bot.config import get_config
-from bot.exceptions import ConfigurationError
+from bot.exceptions import TradingBotError, ValidationError
+from bot.validators import OrderSide, OrderType
 
-def main() -> None:
+# Initialize Typer app and Rich console
+app = typer.Typer(
+    help="🚀 Binance Futures Testnet Trading Bot CLI",
+    add_completion=False,
+    rich_markup_mode="rich"
+)
+console = Console()
+
+def display_order_request(symbol: str, side: str, order_type: str, quantity: float, price: Optional[float]):
+    """Displays a visually appealing table of the order request."""
+    table = Table(
+        title="[bold blue]ORDER REQUEST[/bold blue]", 
+        show_header=True, 
+        header_style="bold white on blue",
+        box=box.ROUNDED
+    )
+    table.add_column("Parameter", style="dim", width=15)
+    table.add_column("Value", style="bold cyan")
+    
+    table.add_row("Symbol", symbol.upper())
+    table.add_row("Side", side.upper())
+    table.add_row("Type", order_type.upper())
+    table.add_row("Quantity", f"{quantity:g}")
+    if price:
+        table.add_row("Price", f"{price:,.2f}")
+    else:
+        table.add_row("Price", "[dim]Market[/dim]")
+    
+    console.print("\n", table)
+
+def display_order_response(response: Dict[str, Any]):
+    """Displays a visually appealing table of the order response."""
+    table = Table(
+        title="[bold green]ORDER RESPONSE[/bold green]", 
+        show_header=True, 
+        header_style="bold white on green",
+        box=box.ROUNDED
+    )
+    table.add_column("Field", style="dim", width=15)
+    table.add_column("Value", style="bold yellow")
+    
+    # Extract key details from Binance response
+    order_id = response.get("orderId", "N/A")
+    status = response.get("status", "UNKNOWN")
+    executed_qty = response.get("executedQty", response.get("origQty", "0"))
+    avg_price = response.get("avgPrice", response.get("price", "0"))
+    
+    table.add_row("Order ID", str(order_id))
+    table.add_row("Status", status)
+    table.add_row("Executed Qty", str(executed_qty))
+    table.add_row("Avg Price", f"{float(avg_price):,.2f}" if avg_price else "0.00")
+    
+    console.print(table, "\n")
+
+@app.command()
+def place(
+    symbol: str = typer.Option(..., "--symbol", "-s", help="Trading pair (e.g., BTCUSDT)"),
+    side: OrderSide = typer.Option(..., "--side", help="Order side (BUY or SELL)"),
+    order_type: OrderType = typer.Option(OrderType.MARKET, "--type", "-t", help="Order type (MARKET or LIMIT)"),
+    quantity: float = typer.Option(..., "--quantity", "-q", help="Quantity to trade"),
+    price: Optional[float] = typer.Option(None, "--price", "-p", help="Limit price (required for LIMIT orders)"),
+):
     """
-    Main function to initialize and run the trading bot.
+    🛒 Place a new order on Binance Futures Testnet.
     """
     try:
-        # Load and validate configuration
+        # 1. Load configuration and setup logging
         config = get_config()
-        
-        # Setup logging
         setup_logging(config.log_level)
         logger = logging.getLogger(__name__)
 
-        # Initialize client and order manager
-        client = BinanceClient(
-            api_key=config.binance_api_key,
-            api_secret=config.binance_api_secret,
-            testnet=config.binance_testnet
-        )
-        order_manager = OrderManager(client)
+        # 2. Display order request summary
+        display_order_request(symbol, side, order_type, quantity, price)
 
-        logger.info("Trading bot started successfully.")
-        
-    except ConfigurationError as e:
-        # Catch specific configuration errors
-        print(f"Configuration Error: {e}")
-        exit(1)
+        # 3. Initialize client and manager
+        with console.status("[bold green]Connecting to Binance...") as status:
+            client = BinanceClient(
+                api_key=config.binance_api_key,
+                api_secret=config.binance_api_secret,
+                testnet=config.binance_testnet
+            )
+            order_manager = OrderManager(client)
+            
+            status.update("[bold blue]Executing order...")
+            response = order_manager.place_order(
+                symbol=symbol,
+                side=side.value,
+                order_type=order_type.value,
+                quantity=quantity,
+                price=price
+            )
+
+        # 4. Display response details
+        display_order_response(response)
+        rprint("[bold green]✅ Order processed successfully.[/bold green]")
+
+    except ValidationError as e:
+        rprint(Panel(f"[bold red]Validation Error:[/bold red] {e}", border_style="red", title="Error"))
+        raise typer.Exit(code=1)
+    except TradingBotError as e:
+        rprint(Panel(f"[bold red]Trading Error:[/bold red] {e}", border_style="red", title="Error"))
+        raise typer.Exit(code=1)
     except Exception as e:
-        # Catch any other unexpected errors
-        print(f"Unexpected error: {e}")
-        exit(1)
+        rprint(Panel(f"[bold red]Unexpected Error:[/bold red] {e}", border_style="red", title="Error"))
+        raise typer.Exit(code=1)
+
+@app.command()
+def balance():
+    """
+    💰 Check your account balance on Binance Futures Testnet.
+    """
+    try:
+        config = get_config()
+        setup_logging(config.log_level)
+        
+        with console.status("[bold green]Fetching balance...") as status:
+            client = BinanceClient(config.binance_api_key, config.binance_api_secret, config.binance_testnet)
+            balance_data = client.get_account_balance("USDT")
+            
+        rprint(Panel(f"Asset: [bold cyan]{balance_data.get('asset')}[/bold cyan]\n"
+                     f"Balance: [bold green]{balance_data.get('balance')}[/bold green]", 
+                     title="Account Balance", border_style="magenta", box=box.DOUBLE))
+                     
+    except Exception as e:
+        rprint(Panel(f"[bold red]Error:[/bold red] {e}", border_style="red", title="Error"))
+        raise typer.Exit(code=1)
 
 if __name__ == "__main__":
-    main()
+    app()
