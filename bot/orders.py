@@ -92,6 +92,74 @@ class OrderManager:
             logger.error("MARKET ORDER FAILED | %s", error_msg)
             raise OrderError(error_msg) from e
 
+    def place_limit_order(self, symbol: str, side: str, quantity: float, price: float) -> Dict[str, Any]:
+        """
+        Places a limit order on Binance Futures with GTC timeInForce.
+
+        Args:
+            symbol: The trading pair (e.g., 'BTCUSDT').
+            side: 'BUY' or 'SELL'.
+            quantity: The amount to trade.
+            price: The limit price.
+
+        Returns:
+            Dict[str, Any]: The structured API response from Binance.
+
+        Raises:
+            OrderError: If the order placement fails due to API or network issues.
+            ValidationError: If the input parameters are invalid.
+        """
+        # 1. Validate inputs
+        params = {
+            "symbol": symbol.upper(),
+            "side": side.upper(),
+            "type": "LIMIT",
+            "quantity": quantity,
+            "price": price,
+            "timeInForce": "GTC"
+        }
+
+        try:
+            validate_order_params(params)
+        except ValidationError as e:
+            logger.error("Validation failed for limit order: %s", e)
+            raise
+
+        # 2. Log request
+        logger.info("LIMIT ORDER REQUEST | %s %s | Quantity: %f | Price: %f | TIF: GTC", 
+                    side.upper(), symbol.upper(), quantity, price)
+        logger.debug("Order Params: %s", params)
+
+        try:
+            # 3. Submit Binance Futures LIMIT order
+            futures_client = self.client.get_client()
+            response = futures_client.futures_create_order(**params)
+
+            # 4. Log response and return structured object
+            logger.info("LIMIT ORDER SUCCESS | Symbol: %s | OrderID: %s | Status: %s", 
+                        response.get('symbol'), response.get('orderId'), response.get('status'))
+            logger.debug("Full Response: %s", json.dumps(response))
+            
+            return response
+
+        except BinanceAPIException as e:
+            # 5. Handle BinanceAPIException
+            error_msg = f"Binance API Error: {e.message} (Code: {e.status_code})"
+            logger.error("LIMIT ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
+
+        except RequestException as e:
+            # 6. Handle network errors
+            error_msg = f"Network Error: Could not connect to Binance. {str(e)}"
+            logger.error("LIMIT ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
+
+        except Exception as e:
+            # 7. Handle unexpected exceptions
+            error_msg = f"Unexpected Error: {str(e)}"
+            logger.error("LIMIT ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
+
     def cancel_order(self, symbol: str, order_id: str) -> Dict[str, Any]:
         """
         Cancels an existing order.
