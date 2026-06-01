@@ -1,6 +1,6 @@
 """
 Command-line interface for the Binance Futures Testnet trading bot.
-Powered by Typer and Rich for a clean and interactive experience.
+Accepts direct arguments for order placement as per assignment requirements.
 """
 
 import logging
@@ -24,12 +24,7 @@ from bot import (
 )
 from bot.validators import OrderSide, OrderType
 
-# Initialize Typer app and Rich console
-app = typer.Typer(
-    help="🚀 Binance Futures Testnet Trading Bot CLI",
-    add_completion=False,
-    rich_markup_mode="rich"
-)
+# Initialize Rich console
 console = Console()
 
 def display_order_request(symbol: str, side: str, order_type: str, quantity: float, price: Optional[float]):
@@ -73,16 +68,17 @@ def display_order_response(response: Dict[str, Any]):
     
     console.print(table, "\n")
 
-@app.command()
-def place(
-    symbol: str = typer.Option(..., "--symbol", "-s", help="Trading pair (e.g., BTCUSDT)"),
+def main(
+    symbol: str = typer.Option(..., "--symbol", help="Trading pair (e.g., BTCUSDT)"),
     side: OrderSide = typer.Option(..., "--side", help="Order side (BUY or SELL)"),
-    order_type: OrderType = typer.Option(OrderType.MARKET, "--type", "-t", help="Order type (MARKET or LIMIT)"),
-    quantity: float = typer.Option(..., "--quantity", "-q", help="Quantity to trade"),
-    price: Optional[float] = typer.Option(None, "--price", "-p", help="Limit price (required for LIMIT orders)"),
+    order_type: OrderType = typer.Option(OrderType.MARKET, "--type", help="Order type (MARKET or LIMIT)"),
+    quantity: float = typer.Option(..., "--quantity", help="Quantity to trade"),
+    price: Optional[float] = typer.Option(None, "--price", help="Limit price (required for LIMIT orders)"),
 ):
     """
-    🛒 Place a new order on Binance Futures Testnet.
+    � Binance Futures Testnet Trading Bot CLI
+    
+    Submit orders directly using command-line arguments.
     """
     try:
         # 1. Load configuration and setup logging
@@ -131,35 +127,5 @@ def place(
         rprint(Panel(f"[bold red]Unexpected Error:[/bold red] {e}", border_style="red", title="Critical Error"))
         raise typer.Exit(code=1)
 
-@app.command()
-def balance():
-    """
-    💰 Check your account balance on Binance Futures Testnet.
-    """
-    try:
-        config = get_config()
-        setup_logging(config.log_level)
-        
-        with console.status("[bold green]Fetching balance...") as status:
-            client = BinanceClient(config.binance_api_key, config.binance_api_secret, config.binance_testnet)
-            balance_data = client.get_account_balance("USDT")
-            
-        rprint(Panel(f"Asset: [bold cyan]{balance_data.get('asset')}[/bold cyan]\n"
-                     f"Balance: [bold green]{balance_data.get('balance')}[/bold green]", 
-                     title="Account Balance", border_style="magenta", box=box.DOUBLE))
-                     
-    except ValidationError as e:
-        rprint(Panel(f"[bold red]Validation Error:[/bold red] {e}", border_style="red", title="Error"))
-        raise typer.Exit(code=1)
-    except NetworkError as e:
-        rprint(Panel(f"[bold red]Network/Connection Error:[/bold red] {e}\nPlease check your internet connection or Binance service status.", border_style="red", title="Network Error"))
-        raise typer.Exit(code=1)
-    except ConfigurationError as e:
-        rprint(Panel(f"[bold red]Configuration Error:[/bold red] {e}\nPlease check your .env file and API credentials.", border_style="red", title="Config Error"))
-        raise typer.Exit(code=1)
-    except Exception as e:
-        rprint(Panel(f"[bold red]Error:[/bold red] {e}", border_style="red", title="Error"))
-        raise typer.Exit(code=1)
-
 if __name__ == "__main__":
-    app()
+    typer.run(main)

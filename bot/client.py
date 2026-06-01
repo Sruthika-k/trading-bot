@@ -51,6 +51,11 @@ class BinanceClient:
                 requests_params={'timeout': 10}  # 10s timeout
             )
             
+            # Explicitly set Futures Testnet URL if testnet is True
+            # In python-binance, testnet=True in constructor mainly sets the Spot Testnet URL.
+            if self._testnet:
+                self._client.FUTURES_URL = 'https://testnet.binancefuture.com/fapi'
+            
             # Verify connection with a simple ping
             self._client.ping()
             logger.info("Successfully connected to Binance API (Testnet: %s).", self._testnet)

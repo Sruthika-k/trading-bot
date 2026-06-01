@@ -4,6 +4,7 @@ Order management and execution logic.
 
 import logging
 import json
+import time
 from typing import Any, Dict, Optional
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from requests.exceptions import RequestException, ConnectTimeout, ReadTimeout
@@ -113,7 +114,28 @@ class OrderManager:
             futures_client = self.client.get_client()
             response = futures_client.futures_create_order(**params)
 
-            # 5. Log response and return structured object
+            # 5. Handle MARKET order final execution polling
+            # Binance Futures often returns 'NEW' for MARKET orders initially on Testnet
+            if order_type.upper() == "MARKET" and response.get("status") == "NEW":
+                order_id = response.get("orderId")
+                logger.info("MARKET order %s accepted (status: NEW). Polling for final execution...", order_id)
+                
+                # Retry 3 times with 1s delay
+                for i in range(3):
+                    time.sleep(1)
+                    try:
+                        updated_order = futures_client.futures_get_order(
+                            symbol=symbol.upper(),
+                            orderId=order_id
+                        )
+                        response = updated_order
+                        if response.get("status") == "FILLED":
+                            logger.info("MARKET order %s filled successfully.", order_id)
+                            break
+                    except Exception as poll_err:
+                        logger.warning("Failed to poll order status for %s: %s", order_id, poll_err)
+
+            # 6. Log response and return structured object
             formatted_response = format_order_response(response)
             logger.info("%s ORDER SUCCESS | Symbol: %s | OrderID: %s | Status: %s", 
                         order_type, formatted_response.get('symbol'), 

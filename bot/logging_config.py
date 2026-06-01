@@ -62,13 +62,25 @@ def setup_logging(
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
         
-    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    # Default level for the application
+    app_level = getattr(logging, log_level.upper(), logging.INFO)
+    root_logger.setLevel(app_level)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
 
-    # Log initial setup completion
+    # Production Refinement: Suppress noisy third-party libraries
+    # This ensures logs stay concise even if the application is in DEBUG mode
+    suppressed_loggers = ["urllib3", "asyncio", "binance", "requests"]
+    for logger_name in suppressed_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
+    # Ensure our application modules respect the log level
+    logging.getLogger("bot").setLevel(app_level)
+    logging.getLogger("__main__").setLevel(app_level)
+
+    # Log initialization at INFO level regardless of DEBUG status
     logging.getLogger(__name__).info(
-        "Centralized logging initialized. Level: %s, File: %s", 
+        "Logging initialized | Level: %s | File: %s", 
         log_level.upper(), 
         log_path
     )
