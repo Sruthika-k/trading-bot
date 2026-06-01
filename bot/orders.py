@@ -3,10 +3,12 @@ Order management and execution logic.
 """
 
 import logging
+import json
 from typing import Any, Dict
 from binance.exceptions import BinanceAPIException
+from requests.exceptions import RequestException
 from bot.client import BinanceClient
-from bot.exceptions import OrderError
+from bot.exceptions import OrderError, ValidationError
 from bot.validators import validate_order_params
 
 logger = logging.getLogger(__name__)
@@ -28,51 +30,67 @@ class OrderManager:
 
     def place_market_order(self, symbol: str, side: str, quantity: float) -> Dict[str, Any]:
         """
-        Places a market order.
+        Places a market order on Binance Futures.
 
         Args:
-            symbol: The trading pair.
+            symbol: The trading pair (e.g., 'BTCUSDT').
             side: 'BUY' or 'SELL'.
             quantity: The amount to trade.
 
         Returns:
-            The API response from Binance.
+            Dict[str, Any]: The structured API response from Binance.
 
         Raises:
-            OrderError: If validation or order placement fails.
+            OrderError: If the order placement fails due to API or network issues.
+            ValidationError: If the input parameters are invalid.
         """
-        # Prepare parameters for validation
+        # 1. Validate inputs
         params = {
-            "symbol": symbol,
-            "side": side,
+            "symbol": symbol.upper(),
+            "side": side.upper(),
             "type": "MARKET",
             "quantity": quantity
         }
 
         try:
-            # Validate parameters before submission
             validate_order_params(params)
-            
-            logger.info("Placing %s market order for %s: %f", side, symbol, quantity)
-            
-            # Use get_client() to get the authenticated python-binance client
+        except ValidationError as e:
+            logger.error("Validation failed for market order: %s", e)
+            raise
+
+        # 2. Log request
+        logger.info("MARKET ORDER REQUEST | %s %s | Quantity: %f", side.upper(), symbol.upper(), quantity)
+        logger.debug("Order Params: %s", params)
+
+        try:
+            # 3. Submit Binance Futures MARKET order
             futures_client = self.client.get_client()
+            response = futures_client.futures_create_order(**params)
+
+            # 4. Log response and return structured object
+            logger.info("MARKET ORDER SUCCESS | Symbol: %s | OrderID: %s | Status: %s", 
+                        response.get('symbol'), response.get('orderId'), response.get('status'))
+            logger.debug("Full Response: %s", json.dumps(response))
             
-            response = futures_client.futures_create_order(
-                symbol=symbol,
-                side=side,
-                type='MARKET',
-                quantity=quantity
-            )
-            
-            logger.info("Order placed successfully: %s", response.get('orderId'))
             return response
-            
-        except (BinanceAPIException, Exception) as e:
-            # Re-wrap exceptions into OrderError
-            error_msg = str(e.message) if hasattr(e, 'message') else str(e)
-            logger.error("Order failed for %s: %s", symbol, error_msg)
-            raise OrderError(f"Market order failed: {error_msg}") from e
+
+        except BinanceAPIException as e:
+            # 5. Handle BinanceAPIException
+            error_msg = f"Binance API Error: {e.message} (Code: {e.status_code})"
+            logger.error("MARKET ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
+
+        except RequestException as e:
+            # 6. Handle network errors
+            error_msg = f"Network Error: Could not connect to Binance. {str(e)}"
+            logger.error("MARKET ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
+
+        except Exception as e:
+            # 7. Handle unexpected exceptions
+            error_msg = f"Unexpected Error: {str(e)}"
+            logger.error("MARKET ORDER FAILED | %s", error_msg)
+            raise OrderError(error_msg) from e
 
     def cancel_order(self, symbol: str, order_id: str) -> Dict[str, Any]:
         """
