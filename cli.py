@@ -16,7 +16,7 @@ from bot.config import get_config
 from bot.logging_config import setup_logging
 from bot.client import BinanceClient
 from bot.orders import OrderManager
-from bot.exceptions import TradingBotError, ValidationError
+from bot.exceptions import TradingBotError, ValidationError, NetworkError, ConfigurationError
 from bot.validators import OrderSide, OrderType
 
 # Initialize Typer app and Rich console
@@ -113,11 +113,17 @@ def place(
     except ValidationError as e:
         rprint(Panel(f"[bold red]Validation Error:[/bold red] {e}", border_style="red", title="Error"))
         raise typer.Exit(code=1)
+    except NetworkError as e:
+        rprint(Panel(f"[bold red]Network/Connection Error:[/bold red] {e}\nPlease check your internet connection or Binance service status.", border_style="red", title="Network Error"))
+        raise typer.Exit(code=1)
+    except ConfigurationError as e:
+        rprint(Panel(f"[bold red]Configuration Error:[/bold red] {e}\nPlease check your .env file and API credentials.", border_style="red", title="Config Error"))
+        raise typer.Exit(code=1)
     except TradingBotError as e:
         rprint(Panel(f"[bold red]Trading Error:[/bold red] {e}", border_style="red", title="Error"))
         raise typer.Exit(code=1)
     except Exception as e:
-        rprint(Panel(f"[bold red]Unexpected Error:[/bold red] {e}", border_style="red", title="Error"))
+        rprint(Panel(f"[bold red]Unexpected Error:[/bold red] {e}", border_style="red", title="Critical Error"))
         raise typer.Exit(code=1)
 
 @app.command()
@@ -137,6 +143,15 @@ def balance():
                      f"Balance: [bold green]{balance_data.get('balance')}[/bold green]", 
                      title="Account Balance", border_style="magenta", box=box.DOUBLE))
                      
+    except ValidationError as e:
+        rprint(Panel(f"[bold red]Validation Error:[/bold red] {e}", border_style="red", title="Error"))
+        raise typer.Exit(code=1)
+    except NetworkError as e:
+        rprint(Panel(f"[bold red]Network/Connection Error:[/bold red] {e}\nPlease check your internet connection or Binance service status.", border_style="red", title="Network Error"))
+        raise typer.Exit(code=1)
+    except ConfigurationError as e:
+        rprint(Panel(f"[bold red]Configuration Error:[/bold red] {e}\nPlease check your .env file and API credentials.", border_style="red", title="Config Error"))
+        raise typer.Exit(code=1)
     except Exception as e:
         rprint(Panel(f"[bold red]Error:[/bold red] {e}", border_style="red", title="Error"))
         raise typer.Exit(code=1)

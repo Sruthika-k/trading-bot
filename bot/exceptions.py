@@ -22,6 +22,10 @@ class MissingCredentialError(ConfigurationError):
     """Raised when a required API credential is missing."""
     pass
 
+class NetworkError(TradingBotError):
+    """Raised when there is a network-related issue (timeout, connection failure)."""
+    pass
+
 class OrderError(TradingBotError):
     """Raised when an order cannot be placed or managed."""
     pass

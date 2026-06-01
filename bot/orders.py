@@ -5,10 +5,10 @@ Order management and execution logic.
 import logging
 import json
 from typing import Any, Dict, Optional
-from binance.exceptions import BinanceAPIException
-from requests.exceptions import RequestException
+from binance.exceptions import BinanceAPIException, BinanceRequestException
+from requests.exceptions import RequestException, ConnectTimeout, ReadTimeout
 from bot.client import BinanceClient
-from bot.exceptions import OrderError, ValidationError
+from bot.exceptions import OrderError, ValidationError, NetworkError
 from bot.validators import validate_order_params
 
 logger = logging.getLogger(__name__)
@@ -124,10 +124,20 @@ class OrderManager:
             logger.error("%s ORDER FAILED | %s", order_type, error_msg)
             raise OrderError(error_msg) from e
 
+        except BinanceRequestException as e:
+            error_msg = f"Binance Request Error: {str(e)}"
+            logger.error("%s ORDER FAILED | %s", order_type, error_msg)
+            raise OrderError(error_msg) from e
+
+        except (ConnectTimeout, ReadTimeout) as e:
+            error_msg = f"Network Timeout: Connection to Binance timed out. {str(e)}"
+            logger.error("%s ORDER FAILED | %s", order_type, error_msg)
+            raise NetworkError(error_msg) from e
+
         except RequestException as e:
             error_msg = f"Network Error: Could not connect to Binance. {str(e)}"
             logger.error("%s ORDER FAILED | %s", order_type, error_msg)
-            raise OrderError(error_msg) from e
+            raise NetworkError(error_msg) from e
 
         except Exception as e:
             error_msg = f"Unexpected Error: {str(e)}"

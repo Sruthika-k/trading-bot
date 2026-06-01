@@ -7,8 +7,9 @@ import logging
 import json
 from typing import Any, Dict, Optional
 from binance.client import Client
-from binance.exceptions import BinanceAPIException
-from bot.exceptions import APIError
+from binance.exceptions import BinanceAPIException, BinanceRequestException
+from requests.exceptions import RequestException, ConnectTimeout, ReadTimeout
+from bot.exceptions import APIError, NetworkError
 
 logger = logging.getLogger(__name__)
 
@@ -43,15 +44,29 @@ class BinanceClient:
         """
         try:
             logger.debug("Attempting to connect to Binance (Testnet: %s)...", self._testnet)
-            self._client = Client(self._api_key, self._api_secret, testnet=self._testnet)
+            self._client = Client(
+                self._api_key, 
+                self._api_secret, 
+                testnet=self._testnet,
+                requests_params={'timeout': 10}  # 10s timeout
+            )
             
             # Verify connection with a simple ping
             self._client.ping()
             logger.info("Successfully connected to Binance API (Testnet: %s).", self._testnet)
             
+        except (ConnectTimeout, ReadTimeout) as e:
+            logger.error("Connection timeout during Binance initialization: %s", e)
+            raise NetworkError(f"Connection to Binance timed out: {e}") from e
+        except RequestException as e:
+            logger.error("Network error during Binance initialization: %s", e)
+            raise NetworkError(f"Could not connect to Binance: {e}") from e
         except BinanceAPIException as e:
             logger.error("Binance API error during initialization: %s (Code: %s)", e.message, e.status_code)
             raise APIError(f"Binance API initialization failed: {e.message}") from e
+        except BinanceRequestException as e:
+            logger.error("Binance Request error during initialization: %s", e)
+            raise APIError(f"Invalid request to Binance: {e}") from e
         except Exception as e:
             logger.critical("Unexpected error during Binance client initialization: %s", e)
             raise APIError(f"Unexpected connection failure: {e}") from e
