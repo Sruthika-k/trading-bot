@@ -7,13 +7,14 @@ from typing import Any, Dict
 from binance.exceptions import BinanceAPIException
 from bot.client import BinanceClient
 from bot.exceptions import OrderError
+from bot.validators import validate_order_params
 
 logger = logging.getLogger(__name__)
 
 class OrderManager:
     """
     Handles placing and managing orders on Binance Futures.
-    Uses the authenticated client from BinanceClient.
+    Uses the authenticated client from BinanceClient and validates inputs.
     """
 
     def __init__(self, client: BinanceClient):
@@ -38,9 +39,20 @@ class OrderManager:
             The API response from Binance.
 
         Raises:
-            OrderError: If the order placement fails.
+            OrderError: If validation or order placement fails.
         """
+        # Prepare parameters for validation
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "type": "MARKET",
+            "quantity": quantity
+        }
+
         try:
+            # Validate parameters before submission
+            validate_order_params(params)
+            
             logger.info("Placing %s market order for %s: %f", side, symbol, quantity)
             
             # Use get_client() to get the authenticated python-binance client
@@ -56,12 +68,11 @@ class OrderManager:
             logger.info("Order placed successfully: %s", response.get('orderId'))
             return response
             
-        except BinanceAPIException as e:
-            logger.error("Binance API error placing order for %s: %s", symbol, e.message)
-            raise OrderError(f"Market order failed: {e.message}") from e
-        except Exception as e:
-            logger.error("Unexpected error placing order for %s: %s", symbol, e)
-            raise OrderError(f"Order placement failed: {e}") from e
+        except (BinanceAPIException, Exception) as e:
+            # Re-wrap exceptions into OrderError
+            error_msg = str(e.message) if hasattr(e, 'message') else str(e)
+            logger.error("Order failed for %s: %s", symbol, error_msg)
+            raise OrderError(f"Market order failed: {error_msg}") from e
 
     def cancel_order(self, symbol: str, order_id: str) -> Dict[str, Any]:
         """
