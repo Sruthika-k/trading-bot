@@ -13,6 +13,30 @@ from bot.validators import validate_order_params
 
 logger = logging.getLogger(__name__)
 
+def format_order_response(response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Safely extracts and formats key fields from a Binance order response.
+
+    Args:
+        response: Raw dictionary response from the Binance API.
+
+    Returns:
+        Dict[str, Any]: A structured dictionary containing:
+            - order_id (int/str): The unique ID of the order.
+            - status (str): Current status of the order (e.g., 'FILLED', 'NEW').
+            - executed_qty (float): The quantity that has been executed.
+            - avg_price (float): The average price of execution.
+    """
+    return {
+        "order_id": response.get("orderId", "N/A"),
+        "status": response.get("status", "UNKNOWN"),
+        "executed_qty": float(response.get("executedQty", response.get("origQty", 0))),
+        "avg_price": float(response.get("avgPrice", response.get("price", 0))),
+        "symbol": response.get("symbol", "N/A"),
+        "side": response.get("side", "N/A"),
+        "type": response.get("type", "N/A")
+    }
+
 class OrderManager:
     """
     Handles placing and managing orders on Binance Futures.
@@ -86,11 +110,14 @@ class OrderManager:
             response = futures_client.futures_create_order(**params)
 
             # 5. Log response and return structured object
+            formatted_response = format_order_response(response)
             logger.info("%s ORDER SUCCESS | Symbol: %s | OrderID: %s | Status: %s", 
-                        order_type, response.get('symbol'), response.get('orderId'), response.get('status'))
+                        order_type, formatted_response.get('symbol'), 
+                        formatted_response.get('order_id'), 
+                        formatted_response.get('status'))
             logger.debug("Full Response: %s", json.dumps(response))
             
-            return response
+            return formatted_response
 
         except BinanceAPIException as e:
             error_msg = f"Binance API Error: {e.message} (Code: {e.status_code})"

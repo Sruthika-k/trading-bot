@@ -60,16 +60,11 @@ def display_order_response(response: Dict[str, Any]):
     table.add_column("Field", style="dim", width=15)
     table.add_column("Value", style="bold yellow")
     
-    # Extract key details from Binance response
-    order_id = response.get("orderId", "N/A")
-    status = response.get("status", "UNKNOWN")
-    executed_qty = response.get("executedQty", response.get("origQty", "0"))
-    avg_price = response.get("avgPrice", response.get("price", "0"))
-    
-    table.add_row("Order ID", str(order_id))
-    table.add_row("Status", status)
-    table.add_row("Executed Qty", str(executed_qty))
-    table.add_row("Avg Price", f"{float(avg_price):,.2f}" if avg_price else "0.00")
+    # Use formatted response fields safely
+    table.add_row("Order ID", str(response.get("order_id", "N/A")))
+    table.add_row("Status", response.get("status", "UNKNOWN"))
+    table.add_row("Executed Qty", str(response.get("executed_qty", "0")))
+    table.add_row("Avg Price", f"{float(response.get('avg_price', 0)):,.2f}")
     
     console.print(table, "\n")
 
