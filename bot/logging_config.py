@@ -1,39 +1,87 @@
 """
-Logging configuration for the trading bot.
+Centralized logging configuration for the Binance Futures Testnet trading bot.
+Provides rotating file logs and consistent formatting across all modules.
 """
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
-def setup_logging(log_level: str = "INFO") -> None:
+
+def setup_logging(
+    log_level: str = "INFO",
+    log_file_name: str = "trading.log",
+    max_bytes: int = 10 * 1024 * 1024,  # 10MB
+    backup_count: int = 5
+) -> None:
     """
-    Sets up logging to both file and console.
+    Sets up a centralized logging system with rotating file and console handlers.
 
     Args:
-        log_level: The logging level to use (e.g., 'INFO', 'DEBUG').
+        log_level: The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        log_file_name: The name of the log file inside the logs/ directory.
+        max_bytes: Maximum size of a single log file before rotation.
+        backup_count: Number of historical log files to retain.
     """
+    # Ensure the logs directory exists
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / "trading.log"
+    log_path = log_dir / log_file_name
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    # Define a consistent format for all log entries
+    # Includes: Timestamp, Log Level, Module Name, and the Message
+    log_format = (
+        "%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s"
     )
+    date_format = "%Y-%m-%d %H:%M:%S"
+    formatter = logging.Formatter(log_format, datefmt=date_format)
 
-    # File handler
-    file_handler = logging.FileHandler(log_file)
+    # 1. Rotating File Handler
+    # Automatically manages log file size and history
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8"
+    )
     file_handler.setFormatter(formatter)
+    file_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 
-    # Console handler
+    # 2. Console (Stdout) Handler
+    # For real-time monitoring during development/deployment
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
+    console_handler.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 
-    # Root logger configuration
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        handlers=[file_handler, console_handler]
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    
+    # Remove any existing handlers to avoid duplicate logs if setup is called multiple times
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+        
+    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    # Log initial setup completion
+    logging.getLogger(__name__).info(
+        "Centralized logging initialized. Level: %s, File: %s", 
+        log_level.upper(), 
+        log_path
     )
 
-    logger = logging.getLogger(__name__)
-    logger.info("Logging initialized.")
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Helper function to get a named logger instance.
+    
+    Args:
+        name: The name of the module or component (usually __name__).
+        
+    Returns:
+        A configured logging.Logger instance.
+    """
+    return logging.getLogger(name)

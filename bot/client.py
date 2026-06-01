@@ -3,6 +3,7 @@ Binance API client wrapper for Futures Testnet.
 """
 
 import logging
+import json
 from typing import Any, Dict, Optional
 from binance.client import Client
 from bot.exceptions import APIError
@@ -23,8 +24,20 @@ class BinanceClient:
             api_secret: Binance API Secret.
             testnet: Whether to use the Testnet (default: True).
         """
-        self.client = Client(api_key, api_secret, testnet=testnet)
-        logger.info("BinanceClient initialized (Testnet: %s).", testnet)
+        try:
+            self.client = Client(api_key, api_secret, testnet=testnet)
+            logger.info("Binance API client connected (Testnet: %s).", testnet)
+        except Exception as e:
+            logger.critical("Failed to connect to Binance API: %s", e)
+            raise APIError(f"API Connection failed: {e}") from e
+
+    def _log_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> None:
+        """Helper to log API requests."""
+        logger.debug("API REQUEST | Method: %s | Params: %s", method, params or {})
+
+    def _log_response(self, method: str, response: Any) -> None:
+        """Helper to log API responses."""
+        logger.debug("API RESPONSE | Method: %s | Data: %s", method, json.dumps(response) if isinstance(response, dict) else response)
 
     def get_account_balance(self) -> Dict[str, Any]:
         """
@@ -36,11 +49,15 @@ class BinanceClient:
         Raises:
             APIError: If the API request fails.
         """
+        method = "futures_account_balance"
         try:
-            # Placeholder for futures_account_balance call
-            return {}
+            self._log_request(method)
+            # In a real implementation: response = self.client.futures_account_balance()
+            response = {"asset": "USDT", "balance": "1000.0"} # Placeholder
+            self._log_response(method, response)
+            return response
         except Exception as e:
-            logger.error("Failed to fetch account balance: %s", e)
+            logger.error("API EXCEPTION | Method: %s | Error: %s", method, e)
             raise APIError(f"Balance fetch failed: {e}") from e
 
     def get_symbol_price(self, symbol: str) -> float:
@@ -56,9 +73,14 @@ class BinanceClient:
         Raises:
             APIError: If the API request fails.
         """
+        method = "get_symbol_ticker"
+        params = {"symbol": symbol}
         try:
-            # Placeholder for get_symbol_ticker call
-            return 0.0
+            self._log_request(method, params)
+            # In a real implementation: response = self.client.get_symbol_ticker(symbol=symbol)
+            response = {"symbol": symbol, "price": "50000.0"} # Placeholder
+            self._log_response(method, response)
+            return float(response["price"])
         except Exception as e:
-            logger.error("Failed to fetch price for %s: %s", symbol, e)
+            logger.error("API EXCEPTION | Method: %s | Params: %s | Error: %s", method, params, e)
             raise APIError(f"Price fetch failed for {symbol}") from e
